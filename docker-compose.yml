@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: clinickit-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-clinicuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-clinicpass}
+      POSTGRES_DB: ${DB_NAME:-clinickit}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  service:
+    build: 
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: clinickit-service
+    restart: always
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-clinicuser}:${DB_PASSWORD:-clinicpass}@db:5432/${DB_NAME:-clinickit}
+      - SECRET_KEY=${SECRET_KEY:-change_me_to_random_secret_32_chars}
+      - ALGORITHM=HS256
+      - TIMEZONE=Asia/Almaty
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflare_tunnel
+    restart: always
+    command: 
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token
+      - eyJhIjoiYTM1ZmY5MDg1NTc5NjZiNWEzYzcwMDMwNmMyMDkyNzciLCJ0IjoiNDMyZmQ4N2ItYzkyNy00Y2FkLWI4NzItNjdhYTJjMDliMmRhIiwicyI6IlpqZGpORFV4TUdFdFlUWmxaQzAwTUdKbExUaGtaRFV0WVRFd1pqY3hNREV3TW1SayJ9
+    depends_on:
+      - service
+    networks:
+      - default
+
+volumes:
+  postgres_data:
