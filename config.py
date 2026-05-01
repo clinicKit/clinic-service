@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     WHATSAPP_INSTANCE: str = ""
     WHATSAPP_TOKEN: str = ""
 
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:4173"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:4173,https://clinic-client-mu.vercel.app"
 
     @property
     def cors_origins_list(self) -> List[str]:
