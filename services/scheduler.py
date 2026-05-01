@@ -12,10 +12,10 @@ services/scheduler.py
 import logging
 from datetime import datetime, timedelta, timezone
 
-import aiosqlite
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from config import settings
+from database import get_db
 from services.whatsapp import (
     DEFAULT_TEMPLATE_24H,
     DEFAULT_TEMPLATE_2H,
@@ -34,10 +34,7 @@ async def _send_reminders() -> None:
     window_24h_end = now_utc + timedelta(hours=24, minutes=5)
     window_2h_end = now_utc + timedelta(hours=2, minutes=5)
 
-    async with aiosqlite.connect(settings.DATABASE_URL) as db:
-        db.row_factory = aiosqlite.Row
-        await db.execute("PRAGMA foreign_keys=ON")
-
+    async for db in get_db():
         # Получаем все предстоящие записи со статусом scheduled
         async with db.execute(
             """

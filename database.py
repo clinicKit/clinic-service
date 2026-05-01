@@ -158,18 +158,26 @@ class PostgresCursor:
             return f"${count[0]}"
         return re.sub(r'\?', replace, sql)
 
-    async def __aenter__(self):
+    async def _execute(self):
         if self.sql.strip().upper().startswith("INSERT"):
-            # Append RETURNING id to get lastrowid
-            sql_with_returning = f"{self.sql.rstrip(';')} RETURNING id"
-            try:
-                self.lastrowid = await self.conn.fetchval(sql_with_returning, *self.params)
-            except Exception:
-                # If RETURNING id fails, just execute normally
-                await self.conn.execute(self.sql, *self.params)
+            # Try to get lastrowid if not already present
+            if "RETURNING" not in self.sql.upper():
+                sql_with_returning = f"{self.sql.rstrip(';').rstrip()} RETURNING id"
+                try:
+                    self.lastrowid = await self.conn.fetchval(sql_with_returning, *self.params)
+                    return self
+                except Exception:
+                    pass
+            await self.conn.execute(self.sql, *self.params)
         else:
             self.rows = await self.conn.fetch(self.sql, *self.params)
         return self
+
+    def __await__(self):
+        return self._execute().__await__()
+
+    async def __aenter__(self):
+        return await self._execute()
 
     async def __aexit__(self, exc_type, exc, tb):
         pass
@@ -178,7 +186,7 @@ class PostgresCursor:
         return [dict(r) for r in self.rows] if self.rows else []
 
     async def fetchone(self):
-        return dict(self.rows[0]) if self.rows else None
+        return dict(self.rows[0]) if self.rows and len(self.rows) > 0 else None
 
 class PostgresConnection:
     def __init__(self, pool):
@@ -196,7 +204,13 @@ class PostgresConnection:
         return PostgresCursor(self.conn, sql, params)
 
     async def commit(self):
-        pass # asyncpg handles autocommit or transactions differently
+        pass # asyncpg usually handles this or uses transactions
+
+    async def executescript(self, sql):
+        # Split by semicolon and execute each
+        for statement in sql.split(";"):
+            if statement.strip():
+                await self.conn.execute(statement)
 
 # Pool for Postgres
 pg_pool = None
@@ -204,8 +218,10 @@ pg_pool = None
 async def init_db() -> None:
     global pg_pool
     if IS_POSTGRES:
-        pg_pool = await asyncpg.create_pool(DB_URL)
+        if not pg_pool:
+            pg_pool = await asyncpg.create_pool(DB_URL)
         async with pg_pool.acquire() as conn:
+            # Executescript replacement
             for statement in get_ddl().split(";"):
                 if statement.strip():
                     await conn.execute(statement)
