@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Allowed CORS Origins: %s", settings.cors_origins_list)
     logger.info("Инициализация БД...")
     await init_db()
     logger.info("Запуск планировщика напоминаний...")
